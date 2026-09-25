@@ -63,7 +63,17 @@ def match_keyword(text: str, keywords) -> str | None:
 def fetch_items() -> list[dict]:
     req = urllib.request.Request(RSS_URL, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as resp:
-        root = ET.fromstring(resp.read())
+        raw = resp.read()
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        # FL.ru за ddos-guard: вместо XML иногда прилетает HTML-челлендж или
+        # заглушка. Даём понятную ошибку вместо сырого ParseError в логах cron.
+        head = raw[:200].decode("utf-8", "replace").strip()
+        raise RuntimeError(
+            "Лента вернула не XML (вероятно, защита от ботов или временная "
+            f"недоступность). Начало ответа: {head!r}"
+        )
     items = []
     for it in root.iter("item"):
         items.append({
